@@ -6,13 +6,13 @@ var rimraf = require('rimraf');
 var mkdirp = require('mkdirp');
 var fs = require('fs');
 var async = require('async');
-var RPC = require('bitcoind-rpc');
+var RPC = require('botcoind-rpc');
 var http = require('http');
-var bitcore = require('bitcore-lib');
+var botcore = require('botcore-lib');
 var exec = require('child_process').exec;
-var bitcore = require('bitcore-lib');
-var PrivateKey = bitcore.PrivateKey;
-var Transaction = bitcore.Transaction;
+var botcore = require('botcore-lib');
+var PrivateKey = botcore.PrivateKey;
+var Transaction = botcore.Transaction;
 
 var blocksGenerated = 0;
 
@@ -27,16 +27,16 @@ var rpcConfig = {
 
 var rpc = new RPC(rpcConfig);
 var debug = true;
-var bitcoreDataDir = '/tmp/bitcore';
-var bitcoinDir = '/tmp/bitcoin';
-var bitcoinDataDirs = [ bitcoinDir ];
+var botcoreDataDir = '/tmp/botcore';
+var botcoinDir = '/tmp/botcoin';
+var botcoinDataDirs = [ botcoinDir ];
 var pks = [];
 var txs = [];
 var txids = [];
 var initialTx;
 var startingPk;
 
-var bitcoin = {
+var botcoin = {
   args: {
     datadir: null,
     listen: 1,
@@ -48,17 +48,17 @@ var bitcoin = {
     rpcport: 58332,
   },
   datadir: null,
-  exec: 'bitcoind', //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/bitcoind
+  exec: 'botcoind', //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/botcoind
   processes: []
 };
 
-var bitcore = {
+var botcore = {
   configFile: {
-    file: bitcoreDataDir + '/bitcore-node.json',
+    file: botcoreDataDir + '/botcore-node.json',
     conf: {
       network: 'regtest',
       port: 53001,
-      datadir: bitcoreDataDir,
+      datadir: botcoreDataDir,
       services: [
         'p2p',
         'db',
@@ -92,9 +92,9 @@ var bitcore = {
     hostname: 'localhost',
     port: 53001,
   },
-  opts: { cwd: bitcoreDataDir },
-  datadir: bitcoreDataDir,
-  exec: 'bitcored',  //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/bitcored
+  opts: { cwd: botcoreDataDir },
+  datadir: botcoreDataDir,
+  exec: 'botcored',  //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/botcored
   args: ['start'],
   process: null
 };
@@ -113,7 +113,7 @@ var request = function(httpOpts, callback) {
   var request = http.request(httpOpts, function(res) {
 
     if (res.statusCode !== 200 && res.statusCode !== 201) {
-      return callback('Error from bitcore-node webserver: ' + res.statusCode);
+      return callback('Error from botcore-node webserver: ' + res.statusCode);
     }
 
     var resError;
@@ -198,15 +198,15 @@ var resetDirs = function(dirs, callback) {
 
 var startBitcoind = function(callback) {
 
-  var args = bitcoin.args;
+  var args = botcoin.args;
   var argList = Object.keys(args).map(function(key) {
     return '-' + key + '=' + args[key];
   });
 
-  var bitcoinProcess = spawn(bitcoin.exec, argList, bitcoin.opts);
-  bitcoin.processes.push(bitcoinProcess);
+  var botcoinProcess = spawn(botcoin.exec, argList, botcoin.opts);
+  botcoin.processes.push(botcoinProcess);
 
-  bitcoinProcess.stdout.on('data', function(data) {
+  botcoinProcess.stdout.on('data', function(data) {
 
     if (debug) {
       process.stdout.write(data.toString());
@@ -214,7 +214,7 @@ var startBitcoind = function(callback) {
 
   });
 
-  bitcoinProcess.stderr.on('data', function(data) {
+  botcoinProcess.stderr.on('data', function(data) {
 
     if (debug) {
       process.stderr.write(data.toString());
@@ -227,11 +227,11 @@ var startBitcoind = function(callback) {
 
 
 var reportBitcoindsStarted = function() {
-  var pids = bitcoin.processes.map(function(process) {
+  var pids = botcoin.processes.map(function(process) {
     return process.pid;
   });
 
-  console.log(pids.length + ' bitcoind\'s started at pid(s): ' + pids);
+  console.log(pids.length + ' botcoind\'s started at pid(s): ' + pids);
 };
 
 var startBitcoinds = function(datadirs, callback) {
@@ -239,13 +239,13 @@ var startBitcoinds = function(datadirs, callback) {
   var listenCount = 0;
   async.eachSeries(datadirs, function(datadir, next) {
 
-    bitcoin.datadir = datadir;
-    bitcoin.args.datadir = datadir;
+    botcoin.datadir = datadir;
+    botcoin.args.datadir = datadir;
 
     if (listenCount++ > 0) {
-      bitcoin.args.listen = 0;
-      bitcoin.args.rpcport = bitcoin.args.rpcport + 1;
-      bitcoin.args.connect = '127.0.0.1';
+      botcoin.args.listen = 0;
+      botcoin.args.rpcport = botcoin.args.rpcport + 1;
+      botcoin.args.connect = '127.0.0.1';
     }
 
     startBitcoind(next);
@@ -278,7 +278,7 @@ var waitForBitcoinReady = function(rpc, callback) {
 var shutdownBitcoind = function(callback) {
   var process;
   do {
-    process = bitcoin.processes.shift();
+    process = botcoin.processes.shift();
     if (process) {
       process.kill();
     }
@@ -287,23 +287,23 @@ var shutdownBitcoind = function(callback) {
 };
 
 var shutdownBitcore = function(callback) {
-  if (bitcore.process) {
-    bitcore.process.kill();
+  if (botcore.process) {
+    botcore.process.kill();
   }
   callback();
 };
 
 var writeBitcoreConf = function() {
-  fs.writeFileSync(bitcore.configFile.file, JSON.stringify(bitcore.configFile.conf));
+  fs.writeFileSync(botcore.configFile.file, JSON.stringify(botcore.configFile.conf));
 };
 
 var startBitcore = function(callback) {
 
-  var args = bitcore.args;
-  console.log('Using bitcored from: ');
+  var args = botcore.args;
+  console.log('Using botcored from: ');
   async.series([
     function(next) {
-      exec('which bitcored', function(err, stdout, stderr) {
+      exec('which botcored', function(err, stdout, stderr) {
         if(err) {
           return next(err);
         }
@@ -312,16 +312,16 @@ var startBitcore = function(callback) {
       });
     },
     function(next) {
-      bitcore.process = spawn(bitcore.exec, args, bitcore.opts);
+      botcore.process = spawn(botcore.exec, args, botcore.opts);
 
-      bitcore.process.stdout.on('data', function(data) {
+      botcore.process.stdout.on('data', function(data) {
 
         if (debug) {
           process.stdout.write(data.toString());
         }
 
       });
-      bitcore.process.stderr.on('data', function(data) {
+      botcore.process.stderr.on('data', function(data) {
 
         if (debug) {
           process.stderr.write(data.toString());
@@ -419,7 +419,7 @@ var addrtxs1 = function(callback) {
     // 0. reset the test directories
     function(next) {
       console.log('step 0: setting up directories.');
-      var dirs = bitcoinDataDirs.concat([bitcoreDataDir]);
+      var dirs = botcoinDataDirs.concat([botcoreDataDir]);
       resetDirs(dirs, function(err) {
         if (err) {
           return next(err);
@@ -428,10 +428,10 @@ var addrtxs1 = function(callback) {
         next();
       });
     },
-    // 1. start 1 bitcoind in regtest mode
+    // 1. start 1 botcoind in regtest mode
     function(next) {
-      console.log('step 1: starting bitcoind.');
-      startBitcoinds(bitcoinDataDirs, function(err) {
+      console.log('step 1: starting botcoind.');
+      startBitcoinds(botcoinDataDirs, function(err) {
         if (err) {
           return callback(err);
         }
@@ -444,12 +444,12 @@ var addrtxs1 = function(callback) {
         });
       });
     },
-    // 2. start up bitcore
+    // 2. start up botcore
     function(next) {
-      console.log('step 2: starting bitcore...');
+      console.log('step 2: starting botcore...');
       startBitcore(next);
     },
-    // 3. wait for blocks to be fully synced in bitcore
+    // 3. wait for blocks to be fully synced in botcore
     function(next) {
       waitForBlocksGenerated(next);
     },

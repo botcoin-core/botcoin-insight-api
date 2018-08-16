@@ -6,7 +6,7 @@ var rimraf = require('rimraf');
 var mkdirp = require('mkdirp');
 var fs = require('fs');
 var async = require('async');
-var RPC = require('bitcoind-rpc');
+var RPC = require('botcoind-rpc');
 var http = require('http');
 
 var rpc1Address;
@@ -28,10 +28,10 @@ var rpc1 = new RPC(rpcConfig);
 rpcConfig.port++;
 var rpc2 = new RPC(rpcConfig);
 var debug = true;
-var bitcoreDataDir = '/tmp/bitcore';
-var bitcoinDataDirs = ['/tmp/bitcoin1', '/tmp/bitcoin2'];
+var botcoreDataDir = '/tmp/botcore';
+var botcoinDataDirs = ['/tmp/botcoin1', '/tmp/botcoin2'];
 
-var bitcoin = {
+var botcoin = {
   args: {
     datadir: null,
     listen: 1,
@@ -43,17 +43,17 @@ var bitcoin = {
     rpcport: 58332,
   },
   datadir: null,
-  exec: 'bitcoind', //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/bitcoind
+  exec: 'botcoind', //if this isn't on your PATH, then provide the absolute path, e.g. /usr/local/bin/botcoind
   processes: []
 };
 
-var bitcore = {
+var botcore = {
   configFile: {
-    file: bitcoreDataDir + '/bitcore-node.json',
+    file: botcoreDataDir + '/botcore-node.json',
     conf: {
       network: 'regtest',
       port: 53001,
-      datadir: bitcoreDataDir,
+      datadir: botcoreDataDir,
       services: [
         'p2p',
         'db',
@@ -93,9 +93,9 @@ var bitcore = {
     hostname: 'localhost',
     port: 53001,
   },
-  opts: { cwd: bitcoreDataDir },
-  datadir: bitcoreDataDir,
-  exec: 'bitcored',
+  opts: { cwd: botcoreDataDir },
+  datadir: botcoreDataDir,
+  exec: 'botcored',
   args: ['start'],
   process: null
 };
@@ -105,15 +105,15 @@ var startBitcoind = function(count, callback) {
   var listenCount = 0;
   async.timesSeries(count, function(n, next) {
 
-    var datadir = bitcoinDataDirs.shift();
+    var datadir = botcoinDataDirs.shift();
 
-    bitcoin.datadir = datadir;
-    bitcoin.args.datadir = datadir;
+    botcoin.datadir = datadir;
+    botcoin.args.datadir = datadir;
 
     if (listenCount++ > 0) {
-      bitcoin.args.listen = 0;
-      bitcoin.args.rpcport++;
-      bitcoin.args.connect = '127.0.0.1';
+      botcoin.args.listen = 0;
+      botcoin.args.rpcport++;
+      botcoin.args.connect = '127.0.0.1';
     }
 
     rimraf(datadir, function(err) {
@@ -128,15 +128,15 @@ var startBitcoind = function(count, callback) {
           return next(err);
         }
 
-        var args = bitcoin.args;
+        var args = botcoin.args;
         var argList = Object.keys(args).map(function(key) {
           return '-' + key + '=' + args[key];
         });
 
-        var bitcoinProcess = spawn(bitcoin.exec, argList, bitcoin.opts);
-        bitcoin.processes.push(bitcoinProcess);
+        var botcoinProcess = spawn(botcoin.exec, argList, botcoin.opts);
+        botcoin.processes.push(botcoinProcess);
 
-        bitcoinProcess.stdout.on('data', function(data) {
+        botcoinProcess.stdout.on('data', function(data) {
 
           if (debug) {
             process.stdout.write(data.toString());
@@ -144,7 +144,7 @@ var startBitcoind = function(count, callback) {
 
         });
 
-        bitcoinProcess.stderr.on('data', function(data) {
+        botcoinProcess.stderr.on('data', function(data) {
 
           if (debug) {
             process.stderr.write(data.toString());
@@ -163,26 +163,26 @@ var startBitcoind = function(count, callback) {
         return callback(err);
       }
 
-      var pids = bitcoin.processes.map(function(process) {
+      var pids = botcoin.processes.map(function(process) {
         return process.pid;
       });
 
-      console.log(count + ' bitcoind\'s started at pid(s): ' + pids);
+      console.log(count + ' botcoind\'s started at pid(s): ' + pids);
       callback();
   });
 };
 
 
 var shutdownBitcoind = function(callback) {
-  bitcoin.processes.forEach(function(process) {
+  botcoin.processes.forEach(function(process) {
     process.kill();
   });
   setTimeout(callback, 3000);
 };
 
 var shutdownBitcore = function(callback) {
-  if (bitcore.process) {
-    bitcore.process.kill();
+  if (botcore.process) {
+    botcore.process.kill();
   }
   callback();
 };
@@ -191,10 +191,10 @@ var shutdownBitcore = function(callback) {
 var buildInitialChain = function(callback) {
   async.waterfall([
     function(next) {
-      console.log('checking to see if bitcoind\'s are connected to each other.');
+      console.log('checking to see if botcoind\'s are connected to each other.');
       rpc1.getinfo(function(err, res) {
         if (err || res.result.connections !== 1) {
-          next(err || new Error('bitcoind\'s not connected to each other.'));
+          next(err || new Error('botcoind\'s not connected to each other.'));
         }
         next();
       });
@@ -264,31 +264,31 @@ var buildInitialChain = function(callback) {
 
 var startBitcore = function(callback) {
 
-  rimraf(bitcoreDataDir, function(err) {
+  rimraf(botcoreDataDir, function(err) {
 
     if(err) {
       return callback(err);
     }
 
-    mkdirp(bitcoreDataDir, function(err) {
+    mkdirp(botcoreDataDir, function(err) {
 
       if(err) {
         return callback(err);
       }
 
-      fs.writeFileSync(bitcore.configFile.file, JSON.stringify(bitcore.configFile.conf));
+      fs.writeFileSync(botcore.configFile.file, JSON.stringify(botcore.configFile.conf));
 
-      var args = bitcore.args;
-      bitcore.process = spawn(bitcore.exec, args, bitcore.opts);
+      var args = botcore.args;
+      botcore.process = spawn(botcore.exec, args, botcore.opts);
 
-      bitcore.process.stdout.on('data', function(data) {
+      botcore.process.stdout.on('data', function(data) {
 
         if (debug) {
           process.stdout.write(data.toString());
         }
 
       });
-      bitcore.process.stderr.on('data', function(data) {
+      botcore.process.stderr.on('data', function(data) {
 
         if (debug) {
           process.stderr.write(data.toString());
@@ -350,7 +350,7 @@ describe('Status', function() {
           return;
         }
 
-        return done('Error from bitcore-node webserver: ' + res.statusCode);
+        return done('Error from botcore-node webserver: ' + res.statusCode);
 
       }
 
@@ -390,7 +390,7 @@ describe('Status', function() {
           return;
         }
 
-        return done('Error from bitcore-node webserver: ' + res.statusCode);
+        return done('Error from botcore-node webserver: ' + res.statusCode);
 
       }
 
@@ -431,7 +431,7 @@ describe('Status', function() {
           return;
         }
 
-        return done('Error from bitcore-node webserver: ' + res.statusCode);
+        return done('Error from botcore-node webserver: ' + res.statusCode);
 
       }
 
@@ -472,7 +472,7 @@ describe('Status', function() {
           return;
         }
 
-        return done('Error from bitcore-node webserver: ' + res.statusCode);
+        return done('Error from botcore-node webserver: ' + res.statusCode);
 
       }
 
@@ -515,7 +515,7 @@ describe('Status', function() {
           return;
         }
 
-        return done('Error from bitcore-node webserver: ' + res.statusCode);
+        return done('Error from botcore-node webserver: ' + res.statusCode);
 
       }
 
